@@ -137,6 +137,7 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
         (t (call-interactively 'helm-semantic-or-imenu))))
 
 (defvar bds/org-indirect-parent-last-configuration)
+(make-variable-buffer-local 'bds/org-indirect-parent-last-configuration)
 
 ;; TODO: Save the current window size
 (defun bds/org-toggle-indirect-parent-window ()
@@ -145,13 +146,14 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
          (bbuff (buffer-base-buffer))
          (bbwin (get-buffer-window bbuff)))
     (when (and (buffer-narrowed-p) bbuff)
-      (if (window-live-p bbwin)
-          (delete-window bbwin)
+      (cond
+       ((window-live-p bbwin)
+        (setq bds/org-indirect-parent-last-configuration
+              (current-window-configuration))
+        (delete-window bbwin))
 
-        (progn (select-window
-                (split-window (get-buffer-window) nil 'left))
-               (switch-to-buffer bbuff)
-               (select-window win))))))
+       (bds/org-indirect-parent-last-configuration
+        (set-window-configuration bds/org-indirect-parent-last-configuration))
 
        (t
         (select-window
