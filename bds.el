@@ -78,8 +78,9 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
                  (split-window win nil 'left))
                 (switch-to-buffer bbuff)))
 
-            (goto-char start)
-            (funcall move-fn)
+            (org-save-outline-visibility t
+              (goto-char start)
+              (funcall move-fn))
             (org-tree-to-indirect-buffer))
 
           (when (not (eq (selected-window) bbwin))
@@ -105,17 +106,30 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
   (interactive "p")
   (bds/org-next-visible (* (or n 1) -1)))
 
-(defun bds/org-up-element (&optional n)
-  (interactive "p")
+(defun bds/org-up-element ()
+  (interactive)
   (let ((bds/org-movement 'org-up-element))
-    (bds/org-navigate n)))
+    (bds/org-navigate)))
 
-(defun bds/org-down-element (&optional n)
-  (interactive "p")
+(defun bds/org-down-element ()
+  (interactive)
   (let ((bds/org-movement 'org-down-element))
-    (bds/org-navigate n)))
+    (bds/org-navigate)))
 
 
+(defun bds/helm-jump-in-buffer ()
+  "Override"
+  (interactive)
+  (cond ((eq major-mode 'org-mode)
+         (let ((bds/org-movement (lambda ()
+                                   (call-interactively
+                                    'helm-org-in-buffer-headings))))
+           (bds/org-navigate)))
+        (t (call-interactively 'helm-semantic-or-imenu))))
+
+(defvar bds/org-indirect-parent-last-configuration)
+
+;; TODO: Save the current window size
 (defun bds/org-toggle-indirect-parent-window ()
   (interactive)
   (let* ((win (get-buffer-window))
@@ -130,13 +144,23 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
                (switch-to-buffer bbuff)
                (select-window win))))))
 
-(spacemacs/set-leader-keys-for-major-mode "org-mode" "B" 'bds/indirect-buffer-jump)
+       (t
+        (select-window
+         (split-window (get-buffer-window) nil 'left))
+        (switch-to-buffer bbuff)
+        (select-window win))))))
+
+
 ;; Override evil-org-mode's bindings for navigating headings so that it updates
 ;; the indirect buffer (if there is one).
 (with-eval-after-load 'org
   (spacemacs/set-leader-keys-for-major-mode 'org-mode
     "B" 'bds/indirect-buffer-jump
-    "]" 'bds/org-toggle-indirect-parent-window)
+    "]" 'bds/org-toggle-indirect-parent-window
+    "ji" 'helm-org-in-buffer-headings)
+
+  (spacemacs/set-leader-keys
+    "ji" 'bds/helm-jump-in-buffer)
 
   (evil-define-key 'normal evil-org-mode-map
     "gj" 'bds/org-navigate
