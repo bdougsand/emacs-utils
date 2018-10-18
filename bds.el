@@ -33,6 +33,7 @@
   "Create a new indirect buffer from the current header then make its window active."
   (interactive)
   (org-tree-to-indirect-buffer)
+  (outline-hide-body)
   (select-window (get-buffer-window org-last-indirect-buffer))
   (end-of-buffer))
 
@@ -52,6 +53,12 @@
 
 (defvar bds/org-movement 'bds/org-next-same-level)
 
+(defun bds/org-indirect-navigate-visibility ()
+  (org-back-to-heading t)
+  (if (org-invisible-p)
+      (org-show-set-visibility 'tree)
+    (outline-hide-leaves)))
+
 (defun bds/org-navigate (&optional n)
   "Intended to behave like org-forward-heading-same-level for the most part, but with some enhancements (IMO) for working with indirect buffers.
 
@@ -68,7 +75,6 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
                        (org-back-to-heading t)
                        (point)))
               (bbwin (get-buffer-window bbuff)))
-          ;; (select-window (get-buffer-window bbuff))
           (save-mark-and-excursion
             (if (window-live-p bbwin)
                 (select-window bbwin)
@@ -78,20 +84,23 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
                  (split-window win nil 'left))
                 (switch-to-buffer bbuff)))
 
-            (org-save-outline-visibility t
-              (goto-char start)
-              (funcall move-fn))
-            (org-tree-to-indirect-buffer))
+            (when (with-demoted-errors
+                      (org-save-outline-visibility t
+                        (goto-char start)
+                        (funcall move-fn))
+                    t)
+              (bds/org-indirect-navigate-visibility)
+              (org-tree-to-indirect-buffer)
 
-          (when (not (eq (selected-window) bbwin))
-            (delete-window))
-          (select-window win))
+              (when (not (eq (selected-window) bbwin))
+                (delete-window)))
+            (select-window win)))
 
-      (progn
-        (funcall move-fn)
-
-        (when (buffer-live-p org-last-indirect-buffer)
-          (org-tree-to-indirect-buffer))))))
+      (when (and (with-demoted-errors (org-save-outline-visibility t
+                                        (funcall move-fn)) t)
+                 (buffer-live-p org-last-indirect-buffer))
+        (org-tree-to-indirect-buffer)
+        (bds/org-indirect-navigate-visibility)))))
 
 (defun bds/org-backward (&optional n)
   (interactive)
