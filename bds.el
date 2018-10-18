@@ -41,22 +41,53 @@
 
   (bds/indirect-buffer-next (* (or n 1) -1)))
 
+(defun bds/org-next-same-level (&optional dir)
+  (interactive)
+  (let ((level (org-current-level))
+        (origin (point))
+        (done nil))
+    (while (not done)
+      (when (or (= (point) (progn
+                             (org-next-visible-heading (or dir 1))
+                             (point)))
+                (= (org-current-level) level))
+        (setq done t)))
+    (when (not (= (org-current-level) level))
+      (goto-char origin))))
+
+(defvar bds/org-movement :same-level)
+
 (defun bds/org-forward (&optional n)
   "Intended to behave like org-forward-heading-same-level for the most part, but with some enhancements (IMO) for working with indirect buffers.
 
 When run inside an indirect buffer, it changes the contents to the next (or previous) subtree in the parent buffer."
   (interactive)
   (let ((bbuff (buffer-base-buffer))
-        (win (selected-window)))
+        (win (selected-window))
+        (forward-fn (case bds/org-movement
+                      ((:same-level) 'bds/org-next-same-level)
+                      (t 'org-forward-heading-same-level))))
     (if (and (buffer-narrowed-p) bbuff)
         (let ((start (save-mark-and-excursion
                        (org-back-to-heading t)
-                       (point))))
-          (select-window (get-buffer-window bbuff))
+                       (point)))
+              (bbwin (get-buffer-window bbuff)))
+          ;; (select-window (get-buffer-window bbuff))
           (save-mark-and-excursion
+            (if (window-live-p bbwin)
+                (select-window bbwin)
+
+              (progn
+                (select-window
+                 (split-window win nil 'left))
+                (switch-to-buffer bbuff)))
+
             (goto-char start)
-            (org-forward-heading-same-level n)
+            (funcall forward-fn n)
             (org-tree-to-indirect-buffer))
+
+          (when (not (eq (selected-window) bbwin))
+            (delete-window))
           (select-window win))
 
       (progn
