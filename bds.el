@@ -90,10 +90,10 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
                         (funcall move-fn))
                     t)
               (bds/org-indirect-navigate-visibility)
-              (org-tree-to-indirect-buffer)
+              (org-tree-to-indirect-buffer))
 
-              (when (not (eq (selected-window) bbwin))
-                (delete-window)))
+            (when (not (eq (selected-window) bbwin))
+              (delete-window))
             (select-window win)))
 
       (when (and (with-demoted-errors (org-save-outline-visibility t
@@ -124,6 +124,20 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
   (interactive)
   (let ((bds/org-movement 'org-down-element))
     (bds/org-navigate)))
+
+(advice-add 'org-move-subtree-up
+            :around
+            (lambda (oldfun &optional n)
+              (let ((bds/org-movement oldfun))
+                (bds/org-navigate n)))
+
+            '((name . "subtree-indirect")))
+
+(advice-add 'org-move-subtree-down
+            :around
+            (lambda (oldfun &optional n)
+              (let ((bds/org-movement oldfun))
+                (bds/org-navigate n))))
 
 
 (defun bds/helm-jump-in-buffer ()
@@ -178,8 +192,8 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
     "gk" 'bds/org-backward
     "gh" 'bds/org-previous-visible
     "gl" 'bds/org-next-visible
-    "g=" 'bds/org-up-element
-    "g-" 'bds/org-down-element))
+    "g-" 'bds/org-up-element
+    "g=" 'bds/org-down-element))
 
 ;;; QuickTime
 ;; A very minor minor mode to help me take notes on videos.
