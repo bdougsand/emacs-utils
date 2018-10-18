@@ -36,11 +36,6 @@
   (select-window (get-buffer-window org-last-indirect-buffer))
   (end-of-buffer))
 
-(defun bds/indirect-buffer-prev (&optional n)
-  (interactive "p")
-
-  (bds/indirect-buffer-next (* (or n 1) -1)))
-
 (defun bds/org-next-same-level (&optional dir)
   (interactive)
   (let ((level (org-current-level))
@@ -55,7 +50,7 @@
     (when (not (= (org-current-level) level))
       (goto-char origin))))
 
-(defvar bds/org-movement :same-level)
+(defvar bds/org-movement 'bds/org-next-same-level)
 
 (defun bds/org-forward (&optional n)
   "Intended to behave like org-forward-heading-same-level for the most part, but with some enhancements (IMO) for working with indirect buffers.
@@ -63,10 +58,7 @@
 When run inside an indirect buffer, it changes the contents to the next (or previous) subtree in the parent buffer."
   (interactive)
   (let ((bbuff (buffer-base-buffer))
-        (win (selected-window))
-        (forward-fn (case bds/org-movement
-                      ((:same-level) 'bds/org-next-same-level)
-                      (t 'org-forward-heading-same-level))))
+        (win (selected-window)))
     (if (and (buffer-narrowed-p) bbuff)
         (let ((start (save-mark-and-excursion
                        (org-back-to-heading t)
@@ -83,7 +75,7 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
                 (switch-to-buffer bbuff)))
 
             (goto-char start)
-            (funcall forward-fn n)
+            (funcall bds/org-movement n)
             (org-tree-to-indirect-buffer))
 
           (when (not (eq (selected-window) bbwin))
@@ -91,7 +83,7 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
           (select-window win))
 
       (progn
-        (org-forward-heading-same-level n)
+        (funcall bds/org-movement n)
 
         (when (buffer-live-p org-last-indirect-buffer)
           (org-tree-to-indirect-buffer))))))
@@ -100,14 +92,42 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
   (interactive)
   (bds/org-forward (* (or n 1) -1)))
 
+(defun bds/org-toggle-indirect-parent-window ()
+  (interactive)
+  (let* ((win (get-buffer-window))
+         (bbuff (buffer-base-buffer))
+         (bbwin (get-buffer-window bbuff)))
+    (when (and (buffer-narrowed-p) bbuff)
+      (if (window-live-p bbwin)
+          (delete-window bbwin)
+
+        (progn (select-window
+                (split-window (get-buffer-window) nil 'left))
+               (switch-to-buffer bbuff)
+               (select-window win))))))
+
+(defun bds/org-next-visible (&optional n)
+  (interactive "p")
+  (let ((bds/org-movement 'org-next-visible-heading))
+    (bds/org-forward n)))
+
+(defun bds/org-previous-visible (&optional n)
+  (interactive "p")
+  (bds/org-next-visible (* (or n -1) -1)))
+
+(spacemacs/set-leader-keys-for-major-mode "org-mode" "B" 'bds/indirect-buffer-jump)
 ;; Override evil-org-mode's bindings for navigating headings so that it updates
 ;; the indirect buffer (if there is one).
 (with-eval-after-load 'org
-  (spacemacs/set-leader-keys-for-major-mode "org-mode" "B" 'bds/indirect-buffer-jump)
+  (spacemacs/set-leader-keys-for-major-mode 'org-mode
+    "B" 'bds/indirect-buffer-jump
+    "]" 'bds/org-toggle-indirect-parent-window)
 
   (evil-define-key 'normal evil-org-mode-map
     "gj" 'bds/org-forward
-    "gk" 'bds/org-backward))
+    "gk" 'bds/org-backward
+    "gh" 'bds/org-previous-visible
+    "gl" 'bds/org-next-visible))
 
 
 ;;; QuickTime
@@ -226,3 +246,8 @@ end tell
 ;;       (narrow-to-region beg end)
 ;;       (outline-show-all)
 ;;       (goto-char pos))))
+
+;; (defun bds/indirect-buffer-prev (&optional n)
+;;   (interactive "p")
+
+;;   (bds/indirect-buffer-next (* (or n 1) -1)))
