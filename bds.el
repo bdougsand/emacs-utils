@@ -52,13 +52,17 @@
 
 (defvar bds/org-movement 'bds/org-next-same-level)
 
-(defun bds/org-forward (&optional n)
+(defun bds/org-navigate (&optional n)
   "Intended to behave like org-forward-heading-same-level for the most part, but with some enhancements (IMO) for working with indirect buffers.
 
 When run inside an indirect buffer, it changes the contents to the next (or previous) subtree in the parent buffer."
   (interactive)
   (let ((bbuff (buffer-base-buffer))
-        (win (selected-window)))
+        (win (selected-window))
+        (move-fn (lambda ()
+                   (if (> (cdr (func-arity bds/org-movement)) 0)
+                       (funcall bds/org-movement n)
+                     (funcall bds/org-movement)) )))
     (if (and (buffer-narrowed-p) bbuff)
         (let ((start (save-mark-and-excursion
                        (org-back-to-heading t)
@@ -75,7 +79,7 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
                 (switch-to-buffer bbuff)))
 
             (goto-char start)
-            (funcall bds/org-movement n)
+            (funcall move-fn)
             (org-tree-to-indirect-buffer))
 
           (when (not (eq (selected-window) bbwin))
@@ -83,14 +87,34 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
           (select-window win))
 
       (progn
-        (funcall bds/org-movement n)
+        (funcall move-fn)
 
         (when (buffer-live-p org-last-indirect-buffer)
           (org-tree-to-indirect-buffer))))))
 
 (defun bds/org-backward (&optional n)
   (interactive)
-  (bds/org-forward (* (or n 1) -1)))
+  (bds/org-navigate (* (or n 1) -1)))
+
+(defun bds/org-next-visible (&optional n)
+  (interactive "p")
+  (let ((bds/org-movement 'org-next-visible-heading))
+    (bds/org-navigate n)))
+
+(defun bds/org-previous-visible (&optional n)
+  (interactive "p")
+  (bds/org-next-visible (* (or n 1) -1)))
+
+(defun bds/org-up-element (&optional n)
+  (interactive "p")
+  (let ((bds/org-movement 'org-up-element))
+    (bds/org-navigate n)))
+
+(defun bds/org-down-element (&optional n)
+  (interactive "p")
+  (let ((bds/org-movement 'org-down-element))
+    (bds/org-navigate n)))
+
 
 (defun bds/org-toggle-indirect-parent-window ()
   (interactive)
@@ -106,15 +130,6 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
                (switch-to-buffer bbuff)
                (select-window win))))))
 
-(defun bds/org-next-visible (&optional n)
-  (interactive "p")
-  (let ((bds/org-movement 'org-next-visible-heading))
-    (bds/org-forward n)))
-
-(defun bds/org-previous-visible (&optional n)
-  (interactive "p")
-  (bds/org-next-visible (* (or n -1) -1)))
-
 (spacemacs/set-leader-keys-for-major-mode "org-mode" "B" 'bds/indirect-buffer-jump)
 ;; Override evil-org-mode's bindings for navigating headings so that it updates
 ;; the indirect buffer (if there is one).
@@ -124,11 +139,12 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
     "]" 'bds/org-toggle-indirect-parent-window)
 
   (evil-define-key 'normal evil-org-mode-map
-    "gj" 'bds/org-forward
+    "gj" 'bds/org-navigate
     "gk" 'bds/org-backward
     "gh" 'bds/org-previous-visible
-    "gl" 'bds/org-next-visible))
-
+    "gl" 'bds/org-next-visible
+    "g=" 'bds/org-up-element
+    "g-" 'bds/org-down-element))
 
 ;;; QuickTime
 ;; A very minor minor mode to help me take notes on videos.
