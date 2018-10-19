@@ -68,6 +68,8 @@
 
 (defvar bds/org-movement 'bds/org-next-same-level)
 
+(defvar bds/org-indirect-subtree-navigation nil)
+
 (defun bds/org-indirect-navigate-visibility ()
   (org-back-to-heading t)
   (if (org-invisible-p)
@@ -86,30 +88,32 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
                        (funcall bds/org-movement n)
                      (funcall bds/org-movement)) )))
     (if (and (buffer-narrowed-p) bbuff)
-        (let ((start (save-mark-and-excursion
-                       (org-back-to-heading t)
-                       (point)))
-              (bbwin (get-buffer-window bbuff)))
-          (save-mark-and-excursion
-            (if (window-live-p bbwin)
-                (select-window bbwin)
+        (if (not (and bds/org-indirect-subtree-navigation
+                      (save-mark-and-excursion
+                        (org-back-to-heading t)
+                        (org-up-heading-safe))))
+            (let ((bbwin (get-buffer-window bbuff)))
+              (save-mark-and-excursion
+                (if (window-live-p bbwin)
+                    (select-window bbwin)
 
-              (progn
-                (select-window
-                 (split-window win nil 'left))
-                (switch-to-buffer bbuff)))
+                  (progn
+                    (select-window
+                     (split-window win nil 'left))
+                    (switch-to-buffer bbuff)))
 
-            (when (with-demoted-errors
-                      (org-save-outline-visibility t
-                        (goto-char start)
-                        (funcall move-fn))
-                    t)
-              (bds/org-indirect-navigate-visibility)
-              (org-tree-to-indirect-buffer))
+                (when (with-demoted-errors
+                          (org-save-outline-visibility t
+                            (funcall move-fn))
+                        t)
+                  (bds/org-indirect-navigate-visibility)
+                  (org-tree-to-indirect-buffer))
 
-            (when (not (eq (selected-window) bbwin))
-              (delete-window))
-            (select-window win)))
+                (when (not (eq (selected-window) bbwin))
+                  (delete-window))
+                (select-window win)))
+
+          (funcall move-fn))
 
       (when (and (with-demoted-errors (org-save-outline-visibility t
                                         (funcall move-fn)) t)
@@ -161,7 +165,8 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
   (cond ((eq major-mode 'org-mode)
          (let ((bds/org-movement (lambda ()
                                    (call-interactively
-                                    'helm-org-in-buffer-headings))))
+                                    'helm-org-in-buffer-headings)))
+               (bds/org-indirect-subtree-navigation nil))
            (bds/org-navigate)))
         (t (call-interactively 'helm-semantic-or-imenu))))
 
