@@ -22,6 +22,21 @@
     (eyebrowse-switch-to-window-config new-index)
     (spacemacs/toggle-maximize-buffer)))
 
+(defun bds/eyebrowse--open-maximized ()
+  (interactive)
+  (let ((buff (current-buffer))
+        (slot (eyebrowse--get 'current-slot)))
+    (call-interactively (if (projectile-project-p)
+                            'helm-projectile-find-file
+                          'helm-mini))
+    (unless (eq buff (current-buffer))
+      (let* ((window-configs (eyebrowse--get 'window-configs))
+             (new-index (1+ (length window-configs))))
+        (eyebrowse-create-window-config)
+        (eyebrowse-switch-to-window-config slot)
+        (switch-to-buffer buff)
+        (eyebrowse-switch-to-window-config new-index)))))
+
 ;; Indirect buffers
 
 ;; By making org-last-indirect-buffer a buffer-local variable, each buffer can
@@ -253,6 +268,7 @@ end tell
 
 
 (spacemacs/set-leader-keys "w]" 'bds/eyebrowse--make-with-window-maximized)
+(spacemacs/set-leader-keys "wo" 'bds/eyebrowse--open-maximized)
 
 ;; Shortcuts for switching perspective:
 (global-set-key (kbd "s-}") 'persp-next)
