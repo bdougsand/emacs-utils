@@ -23,6 +23,7 @@
     (delete-other-windows)))
 
 (defun bds/eyebrowse--open-maximized ()
+  "Create a new layout and prompt for a file to open in it."
   (interactive)
   (let ((buff (current-buffer))
         (slot (eyebrowse--get 'current-slot)))
@@ -35,7 +36,8 @@
         (eyebrowse-create-window-config)
         (eyebrowse-switch-to-window-config slot)
         (switch-to-buffer buff)
-        (eyebrowse-switch-to-window-config new-index)))))
+        (eyebrowse-switch-to-window-config new-index)
+        (delete-other-windows)))))
 
 ;; Indirect buffers
 
