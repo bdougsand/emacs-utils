@@ -308,7 +308,8 @@ end tell
 
 (global-set-key (kbd "s-b") 'switch-to-buffer)
 
-(with-eval-after-load 'paredit
+
+(with-eval-after-load "paredit"
   (add-hook 'clojure-mode-hook
             (lambda ()
               (paredit-mode 1)
@@ -326,14 +327,37 @@ end tell
     (global-set-key (kbd (concat "s-" n))
                     (intern (concat "spacemacs/persp-switch-to-" n)))))
 
-(with-eval-after-load 'python-mode
-  (define-key python-mode-map (kbd "C-M-x") 'python-shell-dwim-send))
 
-(with-eval-after-load 'clojure-mode
+(defun python-shell-dwim-send ()
+  ""
+  (interactive)
+  (if (region-active-p)
+      (python-shell-send-region (region-beginning) (region-end))
+    (python-shell-send-defun)))
+
+(defun bds/python-shell-send-buffer-dwim ()
+  (interactive)
+  (unless (python-shell-get-process)
+    (python-start-or-switch-repl)))
+
+(with-eval-after-load "python"
+  (define-key python-mode-map (kbd "C-M-x") 'python-shell-dwim-send)
+  (spacemacs/set-leader-keys-for-major-mode 'python-mode "ss" 'python-shell-send-line))
+
+(with-eval-after-load "clojure"
   (put-clojure-indent 'defui '(1 :form (1))))
 
+(evil-define-command evil-mc-make-cursor-find-char (count char)
+  :repeat ignore
+  :evil-mc t
+  (interactive "<c><C>")
+  (evil-mc-run-cursors-before)
+  (evil-mc-make-cursor-at-pos (save-excursion
+                                (evil-find-char count char)
+                                (point))))
 
-
+(define-key evil-normal-state-map
+  "grf" 'evil-mc-make-cursor-find-char)
 
 ;; (defun bds/indirect-buffer-next (&optional dir)
 ;;   "Move"
