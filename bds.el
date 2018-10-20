@@ -39,6 +39,25 @@
         (eyebrowse-switch-to-window-config new-index)
         (delete-other-windows)))))
 
+(defun bds/close-windows-in-dir (dir)
+  (let ((mb-window (minibuffer-window))
+        other-win)
+    (while
+        (and
+         (setq other-win (windmove-find-other-window dir))
+         (not (eq other-win mb-window)))
+      (delete-window other-win))))
+
+(defun bds/maximize-buffer-vertically ()
+  (interactive)
+  (let ((conf (winner-conf))
+        (win (selected-window)))
+    (bds/close-windows-in-dir 'above)
+    (bds/close-windows-in-dir 'below)
+    (minibuffer-window)
+    (unless (winner-equal (winner-conf) conf)
+      (winner-save-conditionally))))
+
 ;; Indirect buffers
 
 ;; By making org-last-indirect-buffer a buffer-local variable, each buffer can
@@ -276,6 +295,7 @@ end tell
 
 (spacemacs/set-leader-keys "w]" 'bds/eyebrowse--make-with-window-maximized)
 (spacemacs/set-leader-keys "wo" 'bds/eyebrowse--open-maximized)
+(spacemacs/set-leader-keys "w|" 'bds/maximize-buffer-vertically)
 
 ;; Shortcuts for switching perspective:
 (global-set-key (kbd "s-}") 'persp-next)
