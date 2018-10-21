@@ -40,13 +40,14 @@
         (delete-other-windows)))))
 
 (defun bds/close-windows-in-dir (dir)
-  (let ((mb-window (minibuffer-window))
+  (let ((ref-window (selected-window))
         other-win)
-    (while
-        (and
-         (setq other-win (windmove-find-other-window dir))
-         (not (eq other-win mb-window)))
-      (delete-window other-win))))
+    (while (setq other-win
+                 (windmove-find-other-window dir 1 ref-window))
+      (if (window-deletable-p other-win)
+          (delete-window other-win)
+
+        (setq ref-window other-win)))))
 
 (defun bds/maximize-buffer-vertically ()
   (interactive)
