@@ -357,8 +357,20 @@ end tell
                                 (evil-find-char count char)
                                 (point))))
 
+(evil-define-command evil-mc-find-char-make-cursors (count char)
+  :repeat ignore
+  :evil-mc t
+  (interactive "<c><C>")
+  (evil-find-char count char)
+  (save-excursion
+    (while (ignore-errors (evil-find-char count char) t)
+      (message "found character %d" (point))
+      (evil-mc-make-cursor-here))))
+
 (define-key evil-normal-state-map
   "grf" 'evil-mc-make-cursor-find-char)
+(define-key evil-normal-state-map
+  "gra" 'evil-mc-find-char-make-cursors)
 
 ;; (defun bds/indirect-buffer-next (&optional dir)
 ;;   "Move"
