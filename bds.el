@@ -240,15 +240,19 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
 ;;; QuickTime
 ;; A very minor minor mode to help me take notes on videos.
 
+(defun shell-output (command &optional buff-name)
+  (save-excursion
+    (let ((outbuff (get-buffer-create (or buff-name "*shell-output*"))))
+      (with-current-buffer outbuff
+        (erase-buffer)
+        (shell-command command outbuff)
+        (string-trim-right (buffer-string))))))
+
 (defun bds/quicktime-get-position ()
   "Returns the position of the playhead (in seconds) of the foremost QuickTime movie."
-  (save-excursion
-    (let ((osabuff (get-buffer-create "*osascript-output*")))
-      (with-current-buffer osabuff
-        (erase-buffer)
-        (shell-command "osascript -e 'tell application \"QuickTime Player\" to tell the front document to get the current time'"
-                       osabuff)
-        (string-to-number (buffer-string))))))
+  (string-to-number
+   (shell-output "osascript -e 'tell application \"QuickTime Player\" to tell the front document to get the current time'")))
+
 
 (defun bds/quicktime-toggle ()
   "Pause or play the foremost movie."
