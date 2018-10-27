@@ -253,6 +253,18 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
   (string-to-number
    (shell-output "osascript -e 'tell application \"QuickTime Player\" to tell the front document to get the current time'")))
 
+(defun bds/current-browser-url ()
+  (shell-output "osascript -e 'tell application \"Safari Technology Preview\" to tell front window to get URL of current tab'"))
+
+(defun bds/current-browser-title ()
+  (shell-output "osascript -e 'tell application \"Safari Technology Preview\" to tell front window to get name of current tab'"))
+
+(defun bds/org-insert-browser-link ()
+  (interactive)
+  (org-insert-link 0 (bds/current-browser-url)
+                   (if (region-active-p)
+                       (buffer-substring (region-beginning) (region-end))
+                     (bds/current-browser-title))))
 
 (defun bds/quicktime-toggle ()
   "Pause or play the foremost movie."
