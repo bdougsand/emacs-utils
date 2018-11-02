@@ -412,3 +412,28 @@ end tell
 ;;   (interactive "p")
 
 ;;   (bds/indirect-buffer-next (* (or n 1) -1)))
+(defun bds/js-goto-or-insert-exports ()
+  (save-match-data
+    (if (ignore-errors (search-forward-regexp "^module.exports") t)
+        (progn
+          (search-forward "{")
+          (forward-char))
+
+      (progn
+        (end-of-buffer)
+        (insert "\nmodule.exports = {\n")
+        (save-excursion (insert "};\n"))))))
+
+(defun bds/js-export-sym ()
+  (interactive)
+  (if-let ((tag (semantic-current-tag)))
+      (save-excursion
+        (bds/js-goto-or-insert-exports)
+        (newline-and-indent)
+        (insert (nth 0 tag) ","))
+
+    (user-error "No function at cursor")))
+
+(spacemacs/set-leader-keys-for-major-mode 'js2-mode
+  "p" 'bds/js-export-sym)
+
