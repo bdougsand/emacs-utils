@@ -220,7 +220,11 @@ When run inside an indirect buffer, it changes the contents to the next (or prev
 
 ;; Override evil-org-mode's bindings for navigating headings so that it updates
 ;; the indirect buffer (if there is one).
-(with-eval-after-load 'org
+(with-eval-after-load "org"
+  (add-hook 'org-mode-hook (lambda ()
+                             (company-mode 0)
+                             (visual-line-mode t)))
+
   (spacemacs/set-leader-keys-for-major-mode 'org-mode
     "B" 'bds/indirect-buffer-jump
     "]" 'bds/org-toggle-indirect-parent-window
