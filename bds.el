@@ -387,6 +387,19 @@ end tell
       (message "found character %d" (point))
       (evil-mc-make-cursor-here))))
 
+(defun evil-mc-pad-align ()
+  (interactive)
+  (evil-mc-make-and-goto-first-cursor)
+  (let* ((max-column (let ((current-max 0))
+                       (evil-mc-execute-for-all-cursors
+                        (lambda (cursor)
+                          (when (> (current-column) current-max)
+                            (setq current-max (current-column)))))
+                       current-max)))
+    (evil-mc-execute-for-all-cursors
+     (lambda (cursor)
+       (insert (make-string (- max-column (current-column)) ?\  ))))))
+
 (define-key evil-normal-state-map
   "grf" 'evil-mc-make-cursor-find-char)
 (define-key evil-normal-state-map
