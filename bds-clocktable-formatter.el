@@ -26,6 +26,12 @@
 (require 'org)
 (require 'org-archive)
 
+
+(defvar bds/org-clock/default-properties
+  '("ARCHIVE_FILE" "ARCHIVE_OLPATH"))
+(defvar bds/org-clock-default-params
+  (org-combine-plists org-clocktable-defaults
+                      (list :properties bds/org-clock/default-properties)))
 ;; (org-add-archive-files) splices in the archive files right after the
 ;; corresponding org file. Could this be useful?
 (defun bds/org-clocktable-prepare-tables (tables params)
@@ -39,87 +45,118 @@ entries into the appropriate entries in the same file."
     (set-text-properties 0 (length text) nil text)
     text))
 
-(defun bds/org-clock/index-clock-data-1 (table)
-  "Build a hashtable that maps entry names to its corresponding
-position in the entries table. Indexed by ARCHIVE_OLPATH
-strings (e.g., Heading 1/Subheading/Entry)."
-  (let ((idx 0)
-        (parent-path (list))
-        (last-level 0))
-    (-reduce-from
-     (lambda (index-hash entry)
-       (let* ((level (car entry))
-              (name (bds/clocktable/entry-title entry))
-              (path (progn (cond
-                            ((= level 1)
-                             (setq parent-path (list name)))
-
-                            ((<= level last-level)
-                             (--dotimes (1+ (- last-level level))
-                               (pop parent-path))
-                             (push name parent-path))
-
-                            (t (push name parent-path)))
-                           (string-join
-                            (reverse parent-path) "/"))))
-         (puthash path entry index-hash)
-
-         (setq last-level level)
-         (incf idx)
-         index-hash))
-     (make-hash-table :test 'equal)
-     (nth 2 table))))
+(defun bds/clocktable/prepare-params (params)
+  (let ((properties (cl-concatenate 'list (plist-get params :properties) bds/org-clock/default-properties)))
+    (org-combine-plists org-clocktable-defaults
+                        (list :properties bds/org-clock/default-properties)
+                        params)))
 
 (defun bds/org-clock/index-clock-data (table)
-  "Build a hashtable that maps entry names to its corresponding
-position in the entries table. Indexed by ARCHIVE_OLPATH
-strings (e.g., Heading 1/Subheading/Entry)."
-  (let ((idx 0)
-        (parent-path (list))
-        (last-level 0))
-    (-reduce-from
-     (lambda (index-hash entry)
-       (let* ((level (car entry))
-              (name (bds/clocktable/entry-title entry))
-              (path (progn (cond
-                            ((= level 1)
-                             (setq parent-path (list name)))
+  "Build a hashtable that maps the path of each clocktable entry to
+its corresponding entry. Indexed by ARCHIVE_OLPATH strings (e.g.,
+Heading 1/Subheading/Entry)."
+  (let ((parent-path (list))
+        (last-level 0)
+        (index-hash (make-hash-table :test 'equal))
+        (cur (nth 2 table)))
+    (while cur
+      (let* ((entry (car cur))
+             (level (car entry))
+             (name (bds/clocktable/entry-title entry))
+             (path (progn (cond
+                           ((= level 1)
+                            (setq parent-path (list name)))
 
-                            ((<= level last-level)
-                             (--dotimes (1+ (- last-level level))
-                               (pop parent-path)))
+                           ((<= level last-level)
+                            (--dotimes (1+ (- last-level level))
+                              (pop parent-path))
+                            (push name parent-path))
 
-                            (t (push name parent-path)))
-                           (string-join
-                            (reverse parent-path) "/"))))
-         (puthash path idx index-hash)
-
-         (setq last-level level)
-         (incf idx)
-         index-hash))
-     (make-hash-table :test 'equal)
-     (nth 2 table))))
+                           (t (push name parent-path)))
+                          (string-join
+                           (reverse parent-path) "/"))))
+        (puthash path cur index-hash)
+        (setq last-level level)
+        (setq cur (cdr cur))))
+    index-hash))
 
 (defun bds/org-agenda-corresponding-archives (file-path)
   (with-current-buffer (org-get-agenda-file-buffer file-path)
     (org-all-archive-files)))
 
-(defun bds/org-clock-get-table-data (file params)
-  (with-current-buffer (find-buffer-visiting file)
+(defun bds/org-clock-get-table-data (file &optional params)
+  ;; (org-clock-get-table-data file (or params bds/org-clock-default-params))
+  (with-current-buffer (find-file-noselect file 't)
     (save-excursion
       (save-restriction
-        (org-clock-get-table-data file params)))))
+        (org-clock-get-table-data file (bds/clocktable/prepare-params params)))))
+  )
 
-;; (defun bds/inc-entries-for-file (file-path index)
-;;   (let* ))
+(defun plist-get-default (plist prop default)
+  (if-let ((p (plist-member plist prop)))
+      (cadr p)
+    default))
 
-(defun bds/list-insert (n x list)
-  (if (zerop n)
-      (error "Cannot insert-in-place at position 0")
+(defun list-last-cell (list)
+  (if-let ((rest (cdr list)))
+      (list-last-cell rest)
 
-    (let* ((sublist (nthcdr (- n 1) list)))
-      (setcdr sublist (cons x (cdr sublist)))
-      list)))
+    list))
+
+(defun list-get-cell (n list &optional was-extended-fn)
+  (when (> 0 n)
+    (error "Index must be 0 or greater"))
+
+  (let ((was-extended))
+    (while (> n 0)
+      (unless (cdr list)
+        (setcdr list (cons nil nil))
+        (setq was-extended 't))
+
+      (setq list (cdr list))
+      (setq n (- n 1)))
+    (when (and was-extended was-extended-fn)
+      (funcall was-extended-fn)))
+  list)
+
+(defun bds/splice-list (n xs list)
+  "Insert xs into a list at index n. Modifies the list in place.
+list must not be nil."
+  (let* ((extended)
+         (sublist (list-get-cell n list (lambda () (setq extended 't))))
+         (head (car sublist))
+         (rest (cdr sublist)))
+    (setcar sublist (car xs))
+    (setcdr sublist (cdr xs))
+    (unless extended
+      (setcdr (list-last-cell sublist) (cons head rest)))
+    list))
+
+
+(defun bds/insert-where (fn xs list &rest kargs)
+  (let* ((idx 0)
+         (last)
+         (cur list)
+         (after (plist-get kargs :after))
+         (before (plist-get-default kargs :before (eq after nil))))
+    (while cur
+      (if (funcall fn cur idx)
+          (progn
+            (when after
+              (bds/splice-list 1 xs cur))
+            (when before
+              (if list
+                  (bds/splice-list 0 xs cur)
+
+                (setq list (cons x list))))
+            (setq cur nil))
+
+        (progn
+          (incf idx)
+          (setq last cur)
+          (setq cur (cdr cur)))))
+
+    list))
 
 (defun bds/split-table-path (s)
   (-map (lambda (crumb)
@@ -138,125 +175,88 @@ strings (e.g., Heading 1/Subheading/Entry)."
 
     s))
 
-(defun bds/make-entry (path time)
-  (list (s-count-matches "/" path)
+(defun bds/make-entry (path time &optional props)
+  (list (+ (s-count-matches "/" path) 1)
         (bds/entry-title-from-path path)
         nil
         nil
         time
-        nil ;; Properties
-        ))
+        props))
 
 (defun bds/merge-table-archive (table)
-  "Takes the org-clock data table for a file--as returned by org-clock-get-table-data--and merges in data from the archive files associated with that file."
+  "Merge archived entries into a clocktable data table. TABLE
+contains clocking data as produced by `org-clock-get-table-data`
+and will be modified in place."
   (let* ((file-path (nth 0 table))
          (agenda-file-paths (bds/org-agenda-corresponding-archives file-path))
          (entries (nth 2 table))
-         (index (bds/org-clock/index-clock-data table))
-         (params (org-combine-plists org-clocktable-defaults
-                                     '(:properties ("ARCHIVE_FILE" "ARCHIVE_OLPATH")))))
+         (index (bds/org-clock/index-clock-data table)))
     (-each agenda-file-paths
       (lambda (file-path)
-        (let* ((archive-table (bds/org-clock-get-table-data file-path params)))
+        (let* ((archive-table (bds/org-clock-get-table-data file-path)))
           (-each (nth 2 archive-table)
             ;; Get each clock entry
             (lambda (entry)
               (let* ((properties (nth 5 entry))
-                     (ol-path (cdr (assoc "ARCHIVE_OLPATH" properties)))
+                     (ol-path (concat
+                               (cdr (assoc "ARCHIVE_OLPATH" properties))
+                               "/" (bds/clocktable/entry-title entry)))
                      (ol-subpath ol-path)
-                     (time (nth 4 entry)))
+                     (time (nth 4 entry))
+                     (new-subtree nil))
                 (while (not (string-empty-p ol-subpath))
                   (if-let ((original-entry (gethash ol-subpath index)))
                       ;; The archive path has existing data
                       ;; Add the minutes
-                      (incf (nth 4 original-entry) time)
+                      (let ((level (caar original-entry)))
+                        (cl-incf (nth 4 (car original-entry)) time)
+                        (cl-incf (nth 1 table) time)
+                        (when new-subtree
+                          (bds/insert-where
+                           (lambda (cell idx)
+                             (or (not (cdr cell))
+                                 (<= (caadr cell) level)))
+                           new-subtree
+                           original-entry
+                           :after 't)
+                          (setq new-subtree nil)))
 
                     ;; No existing archive path
                     ;; Create a new entry
-                    (let ((new-entry (bds/make-entry ol-subpath)))
-                      
-                      )
-                    )
+                    (let ((new-entry (bds/make-entry ol-subpath time)))
+                      (puthash ol-subpath new-entry index)
+                      (setq new-subtree (cons new-entry new-subtree))))
 
                   (setq ol-subpath (bds/pop-path-str ol-subpath)))
                 )))
           )))
-    ))
+    table))
 
+(defun bds/map-hash (fn htable)
+  (let ((list nil)
+        (last nil))
+    (maphash (lambda (k v)
+               (let* ((x (funcall fn k v))
+                      (cell (cons x nil)))
+                 (if last
+                     (setcdr last cell)
+
+                   (setq list cell))
+                 (setq last cell)))
+             htable)
+    list))
+
+(defun bds/clocktable/write-table (ipos tables params)
+  (if (eq (plist-get params :scope) `file-with-archives)
+      (let* ((merged-tables (--map (bds/merge-table-archive it)
+                                   (-remove (lambda (tb) (string-suffix-p "_archive" (car tb))) tables))))
+        (org-clocktable-write-default ipos
+                                      merged-tables
+                                      (plist-put params :scope `file)))
+
+    (org-clocktable-write-default ipos tables params)))
 
 ;; Table:
-;; (file-path-str size-bytes-int ((level #(heading-str start-pos-int len-int (:org-clock-minutes count-int)))+ ))
-
-(let* ((file (nth 12 org-agenda-files))
-       (params (org-combine-plists org-clocktable-defaults
-                           '(:properties ("ARCHIVE_FILE" "ARCHIVE_OLPATH" "ABC")
-                                         :scope 'agenda-with-archives))))
-  (with-current-buffer (find-buffer-visiting file)
-    (save-excursion
-      (save-restriction
-        ;; (get-text-property 0 :org-clock-minutes )
-        (let* ((table (org-clock-get-table-data file params))
-               (index (bds/org-clock/index-clock-data-1 table))
-               (entry (gethash "XX" index))
-               )
-
-          ;; entry
-          (incf (nth 4 entry) 1000)
-          table
-          ;(nth 0 (nth 2 table))
-          )
-        ))))
-
-
-
-(let* ((file (nth 12 org-agenda-files))
-       (params (org-combine-plists org-clocktable-defaults
-                                   '(:properties ("ARCHIVE_FILE" "ARCHIVE_OLPATH")
-                                                 :scope 'agenda-with-archives)))
-       (table (with-current-buffer (find-buffer-visiting file)
-                (save-excursion
-                  (save-restriction
-                    (org-clock-get-table-data file params)))))
-       (archive-files (bds/org-agenda-corresponding-archives (nth 0 table)))
-       ;; (archive-table
-       ;;  (with-current-buffer (find-buffer-visiting (first archive-files))
-       ;;    (save-excursion
-       ;;      (save-restriction
-       ;;        (print "hello")
-       ;;        (org-clock-get-table-data (first archive-files) params)))))
-       )
-                                        ;(bds/clocktable/entry-title (->> table (nth 2) (nth 0)))
-  ;; (index-clock-data table)
-
-  (first archive-files)
-  ;; (print archive-table)
-  )
-
-
-;; could try to merge on ARCHIVE_FILE
-;; (pp (let* ((file (concat (nth 8 org-agenda-files) "_archive"))
-;;            (params (org-combine-plists org-clocktable-defaults
-;;                                        '(:properties ("ARCHIVE_FILE" "ARCHIVE_OLPATH")
-;;                                                      :scope 'agenda-with-archives))))
-;;       (with-current-buffer (find-buffer-visiting file)
-;;         (save-excursion
-;;           (save-restriction
-;;             (org-clock-get-table-data file params))))))
-
-;; Default formatter:
-;; https://github.com/jwiegley/org-mode/blob/433103fc5e5bb6d401e37707703a652683b859eb/lisp/org-clock.el#L2321
-
 ;; (filename total-minutes (entries))
 ;; entry: (level entry-header-stuff ?? entry-minutes property-alist)
 ;; entry-header-stuff: #(entry-name line-start-pos line-end-pos face-properties?)
-
-;; Experiments...
-
-(s-slice-at "/.*$" "hello/world/how")
-;; Testing setf/incf... manipulate places (cons cells?)
-(let* ((nested '((1 2 3) (4 5 (6 7))))
-       (sl1 (nth 1 nested))
-       (sl2 (nth 2 sl1)))
-  (setf (nth 0 (nth 2 (nth 1 nested))) 10000)
-  (incf (nth 0 sl1))
-  nested)
